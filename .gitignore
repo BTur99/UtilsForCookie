@@ -1,3 +1,5 @@
 screenshots/
 screenshots_augmented/
 .venv/
+dataset_splitted/
+dataset_raw/
