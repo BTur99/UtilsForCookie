@@ -1,0 +1,22 @@
+[project]
+name = "dev"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Filonov Kirill", email = "pikachu.s3p@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "albumentations>=2.0.8",
+    "mss>=10.2.0",
+    "opencv-python>=5.0.0.93",
+    "ultralytics>=8.4.190",
+]
+
+[project.scripts]
+dev = "dev:main"
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
