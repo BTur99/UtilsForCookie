@@ -1,70 +1,99 @@
 import os
-import shutil
 import random
+import shutil
 from pathlib import Path
 
-def split_dataset(image_dir, label_dir, output_dir, train_ratio=0.8):
-    # Превращаем пути в объекты Path для удобства
-    img_path = Path(image_dir)
-    lbl_path = Path(label_dir)
-    out_path = Path(output_dir)
+# --- НАСТРОЙКИ ---
+SOURCE_DIR = Path("dataset_raw")  # Откуда берем
+TARGET_DIR = Path("dataset")      # Куда складываем (создастся автоматически)
+TRAIN_RATIO = 0.8                 # 80% на обучение
 
-    # Расширения картинок, которые ищем (можно дополнить)
-    valid_extensions = {'.jpg', '.jpeg', '.png', '.bmp'}
+# Расширения картинок, которые мы ищем
+IMG_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 
-    # 1. Собираем все изображения
-    images = [f for f in img_path.iterdir() if f.suffix.lower() in valid_extensions]
-    
-    # 2. Ищем только те пары, где есть и картинка, и текстовый файл лабела
-    valid_pairs = []
-    for img in images:
-        lbl = lbl_path / f"{img.stem}.txt"
-        if lbl.exists():
-            valid_pairs.append((img, lbl))
-        else:
-            print(f"⚠️ Пропущено: для {img.name} не найден файл разметки.")
-
-    if not valid_pairs:
-        print("❌ Не найдено пар изображений и файлов разметки с одинаковыми именами!")
+def main():
+    if not SOURCE_DIR.exists():
+        print(f"❌ Ошибка: Папка {SOURCE_DIR} не найдена!")
         return
 
-    # Перемешиваем датасет для случайного распределения
-    random.shuffle(valid_pairs)
+    # 1. Создаем структуру папок
+    paths = [
+        TARGET_DIR / "images" / "train",
+        TARGET_DIR / "images" / "val",
+        TARGET_DIR / "labels" / "train",
+        TARGET_DIR / "labels" / "val",
+    ]
+    for p in paths:
+        p.mkdir(parents=True, exist_ok=True)
+    print("✅ Структура папок создана.")
 
-    # Считаем точку разделения (80%)
-    split_idx = int(len(valid_pairs) * train_ratio)
-    train_pairs = valid_pairs[:split_idx]
-    val_pairs = valid_pairs[split_idx:]
+    # 2. Собираем список всех картинок
+    all_images = [
+        f for f in SOURCE_DIR.iterdir() 
+        if f.suffix.lower() in IMG_EXTENSIONS
+    ]
 
-    # Функция для безопасного копирования файлов по новым папкам
-    def move_files(pairs, subset):
-        img_out = out_path / subset / 'images'
-        lbl_out = out_path / subset / 'labels'
+    if not all_images:
+        print("❌ Картинки не найдены!")
+        return
+
+    # Перемешиваем список, чтобы классы распределились равномерно
+    random.seed(42)  # Фиксируем seed для повторяемости
+    random.shuffle(all_images)
+
+    # 3. Вычисляем, где заканчивается train
+    split_index = int(len(all_images) * TRAIN_RATIO)
+    train_images = all_images[:split_index]
+    val_images = all_images[split_index:]
+
+    print(f"📊 Всего картинок: {len(all_images)}")
+    print(f"   ➔ В train: {len(train_images)}")
+    print(f"   ➔ В val:   {len(val_images)}")
+
+    # 4. Копируем файлы
+    def copy_files(image_list, split_name):
+        copied = 0
+        missing_labels = 0
+        for img_path in image_list:
+            # Путь для картинки
+            dest_img = TARGET_DIR / "images" / split_name / img_path.name
+            shutil.copy2(img_path, dest_img)
+
+            # Ищем соответствующий .txt файл
+            label_path = img_path.with_suffix(".txt")
+            if label_path.exists():
+                dest_label = TARGET_DIR / "labels" / split_name / label_path.name
+                shutil.copy2(label_path, dest_label)
+                copied += 1
+            else:
+                missing_labels += 1
         
-        # Создаем структуры папок (output/train/images и т.д.)
-        img_out.mkdir(parents=True, exist_ok=True)
-        lbl_out.mkdir(parents=True, exist_ok=True)
+        return copied, missing_labels
 
-        for img, lbl in pairs:
-            # Если нужно переместить вместо копирования, замените shutil.copy на shutil.move
-            shutil.copy(img, img_out / img.name)
-            shutil.copy(lbl, lbl_out / lbl.name)
-
-    # Раскладываем файлы
-    print(f"📦 Всего найдено валидных пар: {len(valid_pairs)}")
-    print(f"⏳ Копирование в train ({len(train_pairs)} шт.)...")
-    move_files(train_pairs, 'train')
+    print("⏳ Копирую train...")
+    train_copied, train_missing = copy_files(train_images, "train")
     
-    print(f"⏳ Копирование в val ({len(val_pairs)} шт.)...")
-    move_files(val_pairs, 'val')
+    print("⏳ Копирую val...")
+    val_copied, val_missing = copy_files(val_images, "val")
 
-    print(f"🎉 Готово! Проверьте папку: {out_path.resolve()}")
+    print(f"✅ Готово! Успешно скопировано пар: {train_copied + val_copied}")
+    if train_missing + val_missing > 0:
+        print(f"⚠ Внимание: для {train_missing + val_missing} картинок не нашлось .txt файлов.")
 
-# --- НАСТРОЙКА ПУТЕЙ ---
-if __name__ == '__main__':
-    # Укажите здесь свои папки:
-    SOURCE_IMAGES = "dataset_raw"  # Где сейчас лежат картинки
-    SOURCE_LABELS = "dataset_raw"  # Где сейчас лежат .txt файлы
-    OUTPUT_FOLDER = "./dataset_splitted"    # Куда сохранить результат (создастся сама)
+    # 5. Генерируем data.yaml
+    yaml_content = f"""path: {TARGET_DIR.absolute()}
+train: images/train
+val: images/val
 
-    split_dataset(SOURCE_IMAGES, SOURCE_LABELS, OUTPUT_FOLDER)
+names:
+  0: game
+  1: upgrade
+"""
+    yaml_path = TARGET_DIR / "data.yaml"
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        f.write(yaml_content)
+    
+    print(f"✅ Файл data.yaml создан по пути: {yaml_path}")
+
+if __name__ == "__main__":
+    main()

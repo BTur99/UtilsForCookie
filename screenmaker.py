@@ -8,7 +8,7 @@ import mss.tools
 save_dir = "screenshots"
 os.makedirs(save_dir, exist_ok=True)
 
-print("Начинаю делать скриншоты каждые 5 секунд...")
+print("Начинаю делать скриншоты каждые 2 секунд...")
 print("Нажмите Ctrl+C для остановки\n")
 
 count = 0
@@ -32,8 +32,8 @@ try:
             count += 1
             print(f"[{count}] Сохранено: {filename}")
 
-            # Ждём 5 секунд
-            time.sleep(5)
+            # Ждём 2 секунд
+            time.sleep(2)
 
 except KeyboardInterrupt:
     print(f"\nОстановлено. Всего сделано скриншотов: {count}")
